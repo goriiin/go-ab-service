@@ -1,0 +1,44 @@
+name: Go CI Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Install Dependencies
+        run: go mod download
+
+      - name: Linting
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.58
+          args: --verbose
+
+      - name: Run Unit Tests
+        run: go test -v -race ./...
+
+      - name: Build All Binaries
+        run: |
+          echo "Building control-plane service..."
+          go build -v -o ./build/control-plane ./cmd/control-plane
+          echo "Building outbox-worker..."
+          go build -v -o ./build/outbox-worker ./cmd/outbox-worker
+          echo "Building snapshot-generator..."
+          go build -v -o ./build/snapshot-generator ./cmd/snapshot-generator

@@ -1,0 +1,129 @@
+# File: docker-compose.yml
+version: '3.8'
+
+services:
+  # 1. Cassandra: Наш "источник истины"
+  cassandra:
+    image: cassandra:4.1
+    container_name: cassandra
+    ports:
+      - "9042:9042"
+    volumes:
+      - cassandra_data:/var/lib/cassandra
+      # Этот скрипт будет выполнен при первом запуске для создания нашего keyspace
+      - ./init/cassandra/init.cql:/docker-entrypoint-initdb.d/init.cql
+    healthcheck:
+      test: ["CMD", "cqlsh", "-e", "describe keyspaces"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+    networks:
+      - ab_net
+
+  # 2. Kafka: Асинхронная доставка сообщений без Zookeeper (KRaft)
+  kafka:
+    image: bitnami/kafka:3.7
+    container_name: kafka
+    ports:
+      - "9092:9092"
+    volumes:
+      - kafka_data:/bitnami/kafka
+    environment:
+      # KRaft settings
+      - KAFKA_CFG_NODE_ID=0
+      - KAFKA_CFG_PROCESS_ROLES=controller,broker
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093
+      - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT
+      # Автоматическое создание топиков при старте
+      - KAFKA_CREATE_TOPICS=ab_deltas:1:1,ab_snapshots_meta:1:1,ab_assignment_events:1:1
+      - ALLOW_PLAINTEXT_LISTENER=yes
+    networks:
+      - ab_net
+
+  # 3. MinIO: S3-совместимое хранилище для снэпшотов
+  minio:
+    image: minio/minio:RELEASE.2024-07-23T22-02-15Z
+    container_name: minio
+    ports:
+      - "9000:9000" # API
+      - "9001:9001" # Веб-консоль
+    volumes:
+      - minio_data:/data
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ab_net
+
+  # 4. mc: Вспомогательный сервис для создания bucket'а в MinIO
+  mc:
+    image: minio/mc
+    container_name: mc
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      /usr/bin/mc config host add local http://minio:9000 minioadmin minioadmin;
+      /usr/bin/mc mb local/ab-snapshots --ignore-existing;
+      /usr/bin/mc policy set public local/ab-snapshots;
+      echo 'MinIO bucket <ab-snapshots> is ready.';
+      "
+    networks:
+      - ab_net
+
+  # 5. Central API: Основной API сервис
+  central-api:
+    build:
+      context: .
+      dockerfile: cmd/central-api/Dockerfile
+    ports:
+      - "8080:8080"
+    depends_on:
+      - cassandra
+      - kafka
+    networks:
+      - ab_net
+
+  # 6. Outbox Worker: Сервис для обработки событий из Outbox
+  outbox-worker:
+    build:
+      context: .
+      dockerfile: cmd/outbox-worker/Dockerfile
+    depends_on:
+      - cassandra
+      - kafka
+    networks:
+      - ab_net
+
+  # 7. Snapshot Generator: Сервис для создания снэпшотов
+  snapshot-generator:
+    build:
+      context: .
+      dockerfile: cmd/snapshot-generator/Dockerfile
+    depends_on:
+      - cassandra
+      - minio
+    networks:
+      - ab_net
+
+# Именованные вольюмы для сохранения данных между перезапусками
+volumes:
+  cassandra_data:
+  kafka_data:
+  minio_data:
+
+# Единая сеть для взаимодействия всех сервисов
+networks:
+  ab_net:
+    driver: bridge
