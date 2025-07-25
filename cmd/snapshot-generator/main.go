@@ -12,7 +12,6 @@ import (
 	"time"
 )
 
-// SnapshotMeta описывает сообщение, отправляемое в Kafka после создания снэпшота.
 type SnapshotMeta struct {
 	SnapshotVersion string `json:"snapshot_version"`
 	Path            string `json:"path"`
@@ -20,17 +19,19 @@ type SnapshotMeta struct {
 }
 
 func main() {
-	// Конфигурация
-	const cassandraHost = "cassandra:9042"
-	const keyspace = "ab_platform"
-	kafkaBrokers := []string{"kafka:9092"}
-	const snapshotsTopic = "ab_snapshots_meta"
-	const minioEndpoint = "minio:9000"
-	const minioAccessKey = "minioadmin"
-	const minioSecretKey = "minioadmin"
-	const snapshotBucket = "ab-snapshots"
 
-	// 1. Инициализация зависимостей
+	const (
+		cassandraHost  = "cassandra:9042"
+		keyspace       = "ab_platform"
+		snapshotsTopic = "ab_snapshots_meta"
+		minioEndpoint  = "minio:9000"
+		minioAccessKey = "minioadmin"
+		minioSecretKey = "minioadmin"
+		snapshotBucket = "ab-snapshots"
+	)
+
+	kafkaBrokers := []string{"kafka:9092"}
+
 	session, err := database.NewCassandraSession(cassandraHost, keyspace)
 	if err != nil {
 		log.Fatalf("FATAL: Cannot connect to Cassandra: %v", err)
@@ -47,7 +48,6 @@ func main() {
 
 	log.Println("INFO: Starting snapshot generation process...")
 
-	// 2. Получение всех активных экспериментов
 	iter := session.Query(`SELECT id, layer_id, config_version, end_time, salt, status, targeting_rules, override_lists, variants FROM experiments WHERE status = ? ALLOW FILTERING`, ab_types.StatusActive).Iter()
 
 	var experiments []ab_types.Experiment
@@ -56,7 +56,6 @@ func main() {
 	var id, layerID, configVersion, salt, status, targetingRules, overrideLists, variants string
 	var endTime time.Time
 
-	// ИСПРАВЛЕННЫЙ ЦИКЛ: Используем iter.Scan() для чтения данных в переменные.
 	for iter.Scan(&id, &layerID, &configVersion, &endTime, &salt, &status, &targetingRules, &overrideLists, &variants) {
 		var exp ab_types.Experiment
 		exp.ID = id
@@ -69,20 +68,18 @@ func main() {
 			exp.EndTime = &endTime
 		}
 
-		// Десериализуем JSON-строки в соответствующие структуры
-		if err := json.Unmarshal([]byte(targetingRules), &exp.TargetingRules); err != nil {
+		if err = json.Unmarshal([]byte(targetingRules), &exp.TargetingRules); err != nil {
 			log.Printf("WARN: Failed to unmarshal targeting_rules for exp %s: %v", exp.ID, err)
 		}
-		if err := json.Unmarshal([]byte(overrideLists), &exp.OverrideLists); err != nil {
+		if err = json.Unmarshal([]byte(overrideLists), &exp.OverrideLists); err != nil {
 			log.Printf("WARN: Failed to unmarshal override_lists for exp %s: %v", exp.ID, err)
 		}
-		if err := json.Unmarshal([]byte(variants), &exp.Variants); err != nil {
+		if err = json.Unmarshal([]byte(variants), &exp.Variants); err != nil {
 			log.Printf("WARN: Failed to unmarshal variants for exp %s: %v", exp.ID, err)
 		}
 
 		experiments = append(experiments, exp)
 
-		// Находим самую последнюю версию конфигурации в снэпшоте
 		if exp.ConfigVersion > latestVersion {
 			latestVersion = exp.ConfigVersion
 		}
@@ -98,7 +95,6 @@ func main() {
 	}
 	log.Printf("INFO: Found %d active experiments to include in snapshot.", len(experiments))
 
-	// 3. Формирование и загрузка снэпшота
 	snapshotData, err := json.Marshal(experiments)
 	if err != nil {
 		log.Fatalf("FATAL: Failed to marshal experiments to JSON: %v", err)
@@ -111,7 +107,6 @@ func main() {
 	}
 	log.Printf("INFO: Successfully uploaded snapshot '%s' to bucket '%s'.", objectName, snapshotBucket)
 
-	// 4. Отправка уведомления в Kafka
 	meta := SnapshotMeta{
 		SnapshotVersion: latestVersion,
 		Path:            objectName,

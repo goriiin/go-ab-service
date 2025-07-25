@@ -15,14 +15,12 @@ import (
 )
 
 func main() {
-	// В реальном приложении эти значения будут браться из конфигурационных файлов или переменных окружения.
 	const (
-		cassandraHost = "cassandra:9042" // Имя сервиса из docker-compose
+		cassandraHost = "cassandra:9042"
 		keyspace      = "ab_platform"
 		apiPort       = ":8080"
 	)
 
-	// 1. Установка соединения с базой данных
 	session, err := database.NewCassandraSession(cassandraHost, keyspace)
 	if err != nil {
 		log.Fatalf("FATAL: Failed to connect to Cassandra: %v", err)
@@ -30,43 +28,37 @@ func main() {
 	defer session.Close()
 	log.Println("INFO: Successfully connected to Cassandra")
 
-	// 2. Инициализация слоев приложения
 	experimentRepo := database.NewRepository(session)
 	experimentHandler := delivery.NewExperimentHandler(experimentRepo)
 
-	// 3. Инициализация роутера с использованием chi
 	r := chi.NewRouter()
 
-	// 4. Подключение базовых middleware для надежности и удобства отладки
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)                    // Логирует каждый запрос
 	r.Use(middleware.Recoverer)                 // Восстанавливается после паник, возвращая 500 ошибку
 	r.Use(middleware.Timeout(60 * time.Second)) // Устанавливает таймаут на запрос
 
-	// 5. Определение маршрутов API
-
-	// Эндпоинт для проверки работоспособности
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
-		// В будущем можно добавить проверку соединения с Cassandra, например session.Query("SELECT release_version FROM system.local").Exec()
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 	})
 
-	// Группа маршрутов для управления экспериментами
+	// Новый эндпоинт для принятия решений
+	r.Post("/decide", experimentHandler.Decide)
+
 	r.Route("/experiments", func(r chi.Router) {
 		r.Post("/", experimentHandler.CreateExperiment)
 		r.Get("/{experimentID}", experimentHandler.GetExperiment)
 		r.Put("/{experimentID}", experimentHandler.UpdateExperiment)
+		r.Delete("/{experimentID}", experimentHandler.DeleteExperiment) // Добавлен маршрут для удаления
 	})
 
-	// Добавление эндпоинта для метрик
 	r.Handle("/metrics", promhttp.Handler())
 
-	// 6. Запуск HTTP-сервера
 	log.Printf("INFO: Starting Central API Service on port %s", apiPort)
-	if err := http.ListenAndServe(apiPort, r); err != nil {
+	if err = http.ListenAndServe(apiPort, r); err != nil {
 		log.Fatalf("FATAL: Failed to start server: %v", err)
 	}
 }
