@@ -100,8 +100,8 @@ services:
     depends_on:
       cassandra:
         condition: service_healthy
-      minio:
-        condition: service_healthy
+      mc:
+        condition: service_completed_successfully
     networks:
       - ab_net_test
 
@@ -111,10 +111,10 @@ services:
       dockerfile: cmd/example-sort-app/Dockerfile
     container_name: example-sort-app-test
     depends_on:
+      mc:
+        condition: service_completed_successfully
       kafka:
         condition: service_started
-      minio:
-        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:8081/sort"]
       interval: 5s
