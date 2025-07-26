@@ -1,5 +1,6 @@
 set -e # Прерывать выполнение при любой ошибке
 
+sleep 300
 # --- Переменные ---
 API_HOST="http://central-api:8080"
 SORT_APP_HOST="http://example-sort-app:8081"
