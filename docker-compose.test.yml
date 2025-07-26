@@ -6,11 +6,6 @@ services:
     image: cassandra:4.1
     container_name: cassandra-test
     restart: on-failure
-    healthcheck:
-      test: [ "CMD", "cqlsh", "-e", "describe keyspaces" ]
-      interval: 10s
-      timeout: 5s
-      retries: 10
     networks:
       - ab_net_test
 
