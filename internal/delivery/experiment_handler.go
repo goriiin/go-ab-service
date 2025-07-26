@@ -2,18 +2,17 @@ package delivery
 
 import (
 	"encoding/json"
-	"github.com/goriiin/go-ab-service/pkg/ab_types"
 	"log"
 	"net/http"
 	"slices"
 	"strconv"
 	"time"
 
+	"github.com/goriiin/go-ab-service/pkg/ab_types"
+
 	"github.com/cespare/xxhash/v2"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
-	"github.com/goriiin/go-ab-service/internal/platform/database"
-
 	"github.com/hashicorp/go-version"
 )
 
@@ -23,11 +22,19 @@ type DecisionRequest struct {
 	Attributes map[string]any `json:"attributes"`
 }
 
-type ExperimentHandler struct {
-	repo *database.Repository
+type Repository interface {
+	CreateExperiment(exp *ab_types.Experiment) error
+	FindExperimentByID(id string) (*ab_types.Experiment, error)
+	FindAllActiveExperiments() ([]ab_types.Experiment, error)
+	UpdateExperiment(exp *ab_types.Experiment) error
+	DeleteExperiment(id string) error
 }
 
-func NewExperimentHandler(r *database.Repository) *ExperimentHandler {
+type ExperimentHandler struct {
+	repo Repository
+}
+
+func NewExperimentHandler(r Repository) *ExperimentHandler {
 	return &ExperimentHandler{repo: r}
 }
 
@@ -252,6 +259,10 @@ func (h *ExperimentHandler) DeleteExperiment(w http.ResponseWriter, r *http.Requ
 	}
 
 	if err := h.repo.DeleteExperiment(experimentID); err != nil {
+		if err.Error() == "experiment not found" {
+			http.Error(w, "Experiment not found", http.StatusNotFound)
+			return
+		}
 		http.Error(w, "Failed to delete experiment", http.StatusInternalServerError)
 		return
 	}
