@@ -82,8 +82,10 @@ services:
       dockerfile: cmd/outbox-worker/Dockerfile
     container_name: outbox-worker-test
     depends_on:
-      - cassandra
-      - kafka
+      cassandra:
+        condition: service_healthy
+      kafka:
+        condition: service_started
     networks:
       - ab_net_test
 
@@ -93,8 +95,10 @@ services:
       dockerfile: cmd/snapshot-generator/Dockerfile
     container_name: snapshot-generator-test
     depends_on:
-      - cassandra
-      - minio
+      cassandra:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
     networks:
       - ab_net_test
 
@@ -104,10 +108,14 @@ services:
       dockerfile: cmd/example-sort-app/Dockerfile
     container_name: example-sort-app-test
     depends_on:
-      - kafka
-      - minio
+      kafka:
+        condition: service_started
+      minio:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8081/sort"]
+      # Обратите внимание, что хелсчек для sort-app не очень надежен, так как он не проверяет фактическое здоровье.
+      # Он просто отправляет запрос. Для теста этого достаточно.
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8081/sort"]
       interval: 5s
       timeout: 2s
       retries: 10
