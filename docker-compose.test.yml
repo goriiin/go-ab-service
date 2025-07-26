@@ -5,14 +5,8 @@ services:
   cassandra:
     image: cassandra:4.1
     container_name: cassandra-test
-    # --- НАЧАЛО ИЗМЕНЕНИЙ ---
-    deploy:
-      resources:
-        limits:
-          memory: 2g
-        reservations:
-          memory: 1g
-    # --- КОНЕЦ ИЗМЕНЕНИЙ ---
+    mem_limit: 2g
+    mem_reservation: 1g
     environment:
       - CASSANDRA_HEAP_SIZE=1G
     healthcheck:
