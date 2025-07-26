@@ -53,7 +53,7 @@ services:
         condition: service_healthy
     entrypoint: >
       /bin/sh -c "
-      /usr/bin/mc config host add local http://minio:9000 minioadmin minioadmin;
+      /usr/bin/mc alias set local http://minio:9000 minioadmin minioadmin;
       /usr/bin/mc mb local/ab-snapshots --ignore-existing;
       /usr/bin/mc policy set public local/ab-snapshots;
       "
@@ -113,8 +113,6 @@ services:
       minio:
         condition: service_healthy
     healthcheck:
-      # Обратите внимание, что хелсчек для sort-app не очень надежен, так как он не проверяет фактическое здоровье.
-      # Он просто отправляет запрос. Для теста этого достаточно.
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:8081/sort"]
       interval: 5s
       timeout: 2s
