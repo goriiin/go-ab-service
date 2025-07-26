@@ -8,6 +8,7 @@ services:
     # --- МИНИМАЛЬНЫЕ ТРЕБОВАНИЯ К ПАМЯТИ ---
     mem_limit: 1g
     mem_reservation: 512m
+    restart: on-failure
     environment:
       - CASSANDRA_HEAP_SIZE=512M
     # --- КОНЕЦ ИЗМЕНЕНИЙ ---
