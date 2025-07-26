@@ -55,7 +55,10 @@ services:
       /bin/sh -c "
       /usr/bin/mc alias set local http://minio:9000 minioadmin minioadmin;
       /usr/bin/mc mb local/ab-snapshots --ignore-existing;
-      /usr/bin/mc policy set public local/ab-snapshots;
+      /usr/bin/mc policy set download local/ab-snapshots;
+      echo '[]' > /tmp/initial_snapshot.json;
+      /usr/bin/mc cp /tmp/initial_snapshot.json local/ab-snapshots/snapshot-initial.json;
+      echo 'Initial empty snapshot created.';
       "
     networks:
       - ab_net_test
