@@ -6,10 +6,6 @@ services:
     image: cassandra:4.1
     container_name: cassandra-test
     restart: on-failure
-    mem_limit: 2g
-    mem_reservation: 1g
-    environment:
-      - CASSANDRA_HEAP_SIZE=1G
     healthcheck:
       test: [ "CMD", "cqlsh", "-e", "describe keyspaces" ]
       interval: 10s
