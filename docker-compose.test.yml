@@ -5,13 +5,11 @@ services:
   cassandra:
     image: cassandra:4.1
     container_name: cassandra-test
-    # --- МИНИМАЛЬНЫЕ ТРЕБОВАНИЯ К ПАМЯТИ ---
-    mem_limit: 1g
-    mem_reservation: 512m
     restart: on-failure
+    mem_limit: 2g
+    mem_reservation: 1g
     environment:
-      - CASSANDRA_HEAP_SIZE=512M
-    # --- КОНЕЦ ИЗМЕНЕНИЙ ---
+      - CASSANDRA_HEAP_SIZE=1G
     healthcheck:
       test: [ "CMD", "cqlsh", "-e", "describe keyspaces" ]
       interval: 10s
