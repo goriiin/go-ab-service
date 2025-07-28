@@ -28,8 +28,12 @@ clean:
 	@echo "Cleanup complete."
 
 test:
-	@echo "Starting end-to-end test environment..."
-	@docker compose -f docker-compose.test.yml up --build --exit-code-from test-runner
-	@echo "Cleaning up test environment..."
+	@echo "--- Starting end-to-end test environment in background ---"
+	@docker compose -f docker-compose.test.yml up --build -d
+
+	@echo "\n--- Attaching to test-runner logs ---"
+	@docker compose -f docker-compose.test.yml logs -f test-runner
+
+	@echo "\n--- Cleaning up test environment ---"
 	@docker compose -f docker-compose.test.yml down
-	@echo "Test run complete."
+	@echo "--- Test run complete ---"
