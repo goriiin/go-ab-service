@@ -172,9 +172,6 @@ func (c *Client) applyDelta(exp *ab_types.Experiment) {
 	c.cache.rwMutex.Lock()
 	defer c.cache.rwMutex.Unlock()
 
-	c.cache.configVersion = exp.ConfigVersion
-	c.metrics.setVersionMetric(c.cache.configVersion)
-
 	// Защита от устаревших сообщений: не применяем дельту, если ее версия старше, чем в кэше.
 	if exp.ConfigVersion <= c.cache.configVersion {
 		log.Printf("WARN: Skipping stale delta for experiment %s (delta version: %s, cache version: %s)", exp.ID, exp.ConfigVersion, c.cache.configVersion)
@@ -213,8 +210,8 @@ func (c *Client) applyDelta(exp *ab_types.Experiment) {
 
 	// Обновляем глобальную версию конфигурации
 	c.cache.configVersion = exp.ConfigVersion
+	c.metrics.setVersionMetric(c.cache.configVersion) // Обновляем метрику вместе с версией
 	log.Printf("INFO: Applied delta for experiment %s. New config version: %s", exp.ID, c.cache.configVersion)
-
 }
 
 // loadInitialSnapshot реализует отказоустойчивую логику загрузки: MinIO -> Local Cache
