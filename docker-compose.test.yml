@@ -21,10 +21,10 @@ services:
     image: bitnami/kafka:3.7
     container_name: kafka-test
     healthcheck:
-      test: ["CMD-SHELL", "kafka-topics.sh --bootstrap-server localhost:9092 --list"]
-      interval: 10s
+      test: [ "CMD-SHELL", "kafka-topics.sh --bootstrap-server localhost:9092 --list | grep -q 'ab_deltas' && kafka-topics.sh --bootstrap-server localhost:9092 --list | grep -q 'ab_assignment_events'" ]
+      interval: 5s
       timeout: 5s
-      retries: 15
+      retries: 20
     environment:
       - KAFKA_CFG_NODE_ID=0
       - KAFKA_CFG_PROCESS_ROLES=controller,broker
