@@ -21,10 +21,10 @@ services:
     image: bitnami/kafka:3.7
     container_name: kafka-test
     healthcheck:
-      test: [ "CMD-SHELL", "kafka-topics.sh --bootstrap-server localhost:9092 --list | grep -q 'ab_deltas' && kafka-topics.sh --bootstrap-server localhost:9092 --list | grep -q 'ab_assignment_events'" ]
-      interval: 5s
+      test: ["CMD-SHELL", "kafka-topics.sh --bootstrap-server localhost:9092 --list"]
+      interval: 10s
       timeout: 5s
-      retries: 20
+      retries: 15
     environment:
       - KAFKA_CFG_NODE_ID=0
       - KAFKA_CFG_PROCESS_ROLES=controller,broker
@@ -34,8 +34,25 @@ services:
       - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092
       - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093
       - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT
-      - KAFKA_CREATE_TOPICS=ab_deltas:1:1,ab_snapshots_meta:1:1,ab_assignment_events:1:1
       - ALLOW_PLAINTEXT_LISTENER=yes
+    networks:
+      - ab_net_test
+
+  kafka-setup:
+    image: bitnami/kafka:3.7
+    container_name: kafka-setup-test
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint: [ "/bin/sh", "-c" ]
+    command:
+      - |
+        until kafka-topics.sh --bootstrap-server kafka:9092 --list; do
+          sleep 2
+        done
+        kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic ab_deltas --partitions 1 --replication-factor 1
+        kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic ab_snapshots_meta --partitions 1 --replication-factor 1
+        kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic ab_assignment_events --partitions 1 --replication-factor 1
     networks:
       - ab_net_test
 
@@ -67,7 +84,6 @@ services:
       /usr/bin/mc policy set download local/ab-snapshots;
       echo '[]' > /tmp/initial_snapshot.json;
       /usr/bin/mc cp /tmp/initial_snapshot.json local/ab-snapshots/snapshot-initial.json;
-      echo 'Initial empty snapshot created.';
       "
     networks:
       - ab_net_test
@@ -100,6 +116,8 @@ services:
         condition: service_healthy
       kafka:
         condition: service_healthy
+      kafka-setup:
+        condition: service_completed_successfully
     environment:
       - DB_NAME=ab_platform_test
     networks:
@@ -130,6 +148,8 @@ services:
         condition: service_completed_successfully
       kafka:
         condition: service_healthy
+      kafka-setup:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "wget -q --method=POST --body-data='{\"user_id\":\"healthcheck\"}' --header='Content-Type: application/json' -O /dev/null http://localhost:8081/sort"]
       interval: 5s
