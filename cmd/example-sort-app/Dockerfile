@@ -13,5 +13,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o /app/example-sort-app ./cmd/example-sor
 # Stage 2: Runtime
 FROM alpine:latest
 WORKDIR /app
+
+RUN apk --no-cache add wget
 COPY --from=builder /app/example-sort-app .
 CMD ["./example-sort-app"]
