@@ -29,7 +29,7 @@ clean:
 
 test:
 	@echo "Starting end-to-end test environment..."
-	@docker compose -f docker-compose.test.yml up --build --abort-on-container-exit
+	@docker compose -f docker-compose.test.yml up --build --exit-code-from test-runner
 	@echo "Cleaning up test environment..."
 	@docker compose -f docker-compose.test.yml down
 	@echo "Test run complete."
