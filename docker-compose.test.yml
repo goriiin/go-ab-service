@@ -93,6 +93,8 @@ services:
       context: .
       dockerfile: cmd/central-api/Dockerfile
     container_name: central-api-test
+    ports:
+      - "8080:8080"
     depends_on:
       postgres:
         condition: service_healthy
