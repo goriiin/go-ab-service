@@ -3,6 +3,7 @@ package client_sdk
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"github.com/goriiin/go-ab-service/pkg/ab_types"
 	"log"
 	"slices"
@@ -92,24 +93,15 @@ func (c *Client) trackAssignment(ctx *DecisionContext, expID, variantName string
 	}
 }
 
-// evaluateRule - ядро логики, проверяющее одно конкретное правило.
 func (c *Client) evaluateRule(ctx *DecisionContext, rule *ab_types.TargetingRule) bool {
 	userValue, ok := ctx.Attributes[rule.Attribute]
 	if !ok {
-		return false // Если у пользователя нет нужного атрибута, правило не выполнено
+		return false
 	}
 
-	// ... (Большой switch по rule.Operator с реализацией всех операторов)
-	// Для краткости, здесь приведена только часть реализации
 	switch rule.Operator {
 	case ab_types.OpEquals:
-		userStr, ok1 := userValue.(string)
-		ruleStr, ok2 := rule.Value.(string)
-		if !ok1 || !ok2 {
-			return false
-		}
-		return userStr == ruleStr
-
+		return fmt.Sprintf("%v", userValue) == fmt.Sprintf("%v", rule.Value)
 	case ab_types.OpGreaterThan:
 		userNum, ok1 := toFloat64(userValue)
 		ruleNum, ok2 := toFloat64(rule.Value)
@@ -117,11 +109,10 @@ func (c *Client) evaluateRule(ctx *DecisionContext, rule *ab_types.TargetingRule
 			return false
 		}
 		return userNum > ruleNum
-
 	case ab_types.OpInList:
-		userStr, ok1 := userValue.(string)
+		userStr := fmt.Sprintf("%v", userValue)
 		ruleList, ok2 := rule.Value.([]interface{})
-		if !ok1 || !ok2 {
+		if !ok2 {
 			return false
 		}
 		for _, item := range ruleList {
@@ -130,22 +121,18 @@ func (c *Client) evaluateRule(ctx *DecisionContext, rule *ab_types.TargetingRule
 			}
 		}
 		return false
-
 	case ab_types.OpVersionGreaterThan:
 		userVerStr, ok1 := userValue.(string)
 		ruleVerStr, ok2 := rule.Value.(string)
 		if !ok1 || !ok2 {
 			return false
 		}
-
 		userV, err1 := version.NewVersion(userVerStr)
 		ruleV, err2 := version.NewVersion(ruleVerStr)
 		if err1 != nil || err2 != nil {
 			return false
 		}
-
 		return userV.GreaterThan(ruleV)
-
 	default:
 		log.Printf("WARN: Unknown operator used: %s", rule.Operator)
 		return false

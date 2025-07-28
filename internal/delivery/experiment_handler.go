@@ -2,6 +2,7 @@ package delivery
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"slices"
@@ -137,20 +138,17 @@ func evaluateRule(req *DecisionRequest, rule *ab_types.TargetingRule) bool {
 	if !ok {
 		return false
 	}
-
 	switch rule.Operator {
 	case ab_types.OpEquals:
-		userStr, ok1 := userValue.(string)
-		ruleStr, ok2 := rule.Value.(string)
-		return ok1 && ok2 && userStr == ruleStr
+		return fmt.Sprintf("%v", userValue) == fmt.Sprintf("%v", rule.Value)
 	case ab_types.OpGreaterThan:
 		userNum, ok1 := toFloat64(userValue)
 		ruleNum, ok2 := toFloat64(rule.Value)
 		return ok1 && ok2 && userNum > ruleNum
 	case ab_types.OpInList:
-		userStr, ok1 := userValue.(string)
+		userStr := fmt.Sprintf("%v", userValue)
 		ruleList, ok2 := rule.Value.([]interface{})
-		if !ok1 || !ok2 {
+		if !ok2 {
 			return false
 		}
 		for _, item := range ruleList {
