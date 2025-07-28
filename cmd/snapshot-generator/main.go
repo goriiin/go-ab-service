@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"log"
+	"time"
+
+	"github.com/goriiin/go-ab-service/internal/config"
 	"github.com/goriiin/go-ab-service/internal/platform/database"
 	"github.com/goriiin/go-ab-service/internal/platform/queue"
 	"github.com/goriiin/go-ab-service/internal/platform/storage"
 	"github.com/goriiin/go-ab-service/pkg/ab_types"
-	"log"
-	"time"
 )
 
 type SnapshotMeta struct {
@@ -19,24 +21,21 @@ type SnapshotMeta struct {
 }
 
 func main() {
-
 	const (
-		cassandraHost  = "cassandra:9042"
-		keyspace       = "ab_platform"
 		snapshotsTopic = "ab_snapshots_meta"
 		minioEndpoint  = "minio:9000"
 		minioAccessKey = "minioadmin"
 		minioSecretKey = "minioadmin"
 		snapshotBucket = "ab-snapshots"
 	)
-
 	kafkaBrokers := []string{"kafka:9092"}
 
-	session, err := database.NewCassandraSession(cassandraHost, keyspace)
+	dbCfg := config.NewDBConfig()
+	dbPool, err := database.NewPostgresConnection(dbCfg.ConnectionString())
 	if err != nil {
-		log.Fatalf("FATAL: Cannot connect to Cassandra: %v", err)
+		log.Fatalf("FATAL: Cannot connect to PostgreSQL: %v", err)
 	}
-	defer session.Close()
+	defer dbPool.Close()
 
 	minioClient, err := storage.NewMinIOClient(minioEndpoint, minioAccessKey, minioSecretKey, false)
 	if err != nil {
@@ -48,34 +47,27 @@ func main() {
 
 	log.Println("INFO: Starting snapshot generation process...")
 
-	iter := session.Query(`SELECT id, layer_id, config_version, end_time, salt, status, targeting_rules, override_lists, variants FROM experiments WHERE status = ? ALLOW FILTERING`, ab_types.StatusActive).Iter()
+	query := `
+		SELECT id, layer_id, config_version, end_time, salt, status, targeting_rules, override_lists, variants
+		FROM experiments WHERE status = $1`
+
+	rows, err := dbPool.Query(context.Background(), query, ab_types.StatusActive)
+	if err != nil {
+		log.Fatalf("FATAL: Failed to query active experiments: %v", err)
+	}
+	defer rows.Close()
 
 	var experiments []ab_types.Experiment
 	var latestVersion string
 
-	var id, layerID, configVersion, salt, status, targetingRules, overrideLists, variants string
-	var endTime time.Time
-
-	for iter.Scan(&id, &layerID, &configVersion, &endTime, &salt, &status, &targetingRules, &overrideLists, &variants) {
+	for rows.Next() {
 		var exp ab_types.Experiment
-		exp.ID = id
-		exp.LayerID = layerID
-		exp.ConfigVersion = configVersion
-		exp.Salt = salt
-		exp.Status = ab_types.ExperimentStatus(status)
-
-		if !endTime.IsZero() {
-			exp.EndTime = &endTime
-		}
-
-		if err = json.Unmarshal([]byte(targetingRules), &exp.TargetingRules); err != nil {
-			log.Printf("WARN: Failed to unmarshal targeting_rules for exp %s: %v", exp.ID, err)
-		}
-		if err = json.Unmarshal([]byte(overrideLists), &exp.OverrideLists); err != nil {
-			log.Printf("WARN: Failed to unmarshal override_lists for exp %s: %v", exp.ID, err)
-		}
-		if err = json.Unmarshal([]byte(variants), &exp.Variants); err != nil {
-			log.Printf("WARN: Failed to unmarshal variants for exp %s: %v", exp.ID, err)
+		err := rows.Scan(
+			&exp.ID, &exp.LayerID, &exp.ConfigVersion, &exp.EndTime, &exp.Salt, &exp.Status,
+			&exp.TargetingRules, &exp.OverrideLists, &exp.Variants,
+		)
+		if err != nil {
+			log.Fatalf("FATAL: Failed to scan experiment row: %v", err)
 		}
 
 		experiments = append(experiments, exp)
@@ -85,8 +77,8 @@ func main() {
 		}
 	}
 
-	if err := iter.Close(); err != nil {
-		log.Fatalf("FATAL: Failed to iterate over experiments: %v", err)
+	if err := rows.Err(); err != nil {
+		log.Fatalf("FATAL: Failed to iterate over experiments: %w", err)
 	}
 
 	if len(experiments) == 0 {

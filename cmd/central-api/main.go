@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"github.com/goriiin/go-ab-service/internal/config"
 	"log"
 	"net/http"
 	"time"
@@ -15,19 +16,16 @@ import (
 )
 
 func main() {
-	const (
-		cassandraHost = "cassandra:9042"
-		keyspace      = "ab_platform"
-		apiPort       = ":8080"
-	)
+	const apiPort = ":8080"
 
-	session, err := database.NewCassandraSession(cassandraHost, keyspace)
+	dbCfg := config.NewDBConfig()
+	dbPool, err := database.NewPostgresConnection(dbCfg.ConnectionString())
 	if err != nil {
-		log.Fatalf("FATAL: Failed to connect to Cassandra: %v", err)
+		log.Fatalf("FATAL: Failed to connect to PostgreSQL: %v", err)
 	}
-	defer session.Close()
+	defer dbPool.Close()
 
-	repo := database.NewRepository(session)
+	repo := database.NewRepository(dbPool)
 	handler := delivery.NewExperimentHandler(repo)
 
 	r := chi.NewRouter()

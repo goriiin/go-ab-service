@@ -1,11 +1,19 @@
-# File: go-ab-service/docker-compose.test.yml
-version: '3.8'
-
 services:
-  cassandra:
-    image: cassandra:4.1
-    container_name: cassandra-test
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres-test
     restart: on-failure
+    volumes:
+      - ./init/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    environment:
+      - POSTGRES_DB=ab_platform_test
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d ab_platform_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     networks:
       - ab_net_test
 
@@ -65,8 +73,8 @@ services:
       dockerfile: cmd/central-api/Dockerfile
     container_name: central-api-test
     depends_on:
-      cassandra:
-        condition: service_started
+      postgres:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8080/health"]
       interval: 5s
@@ -81,8 +89,8 @@ services:
       dockerfile: cmd/outbox-worker/Dockerfile
     container_name: outbox-worker-test
     depends_on:
-      cassandra:
-        condition: service_started
+      postgres:
+        condition: service_healthy
       kafka:
         condition: service_started
     networks:
@@ -94,8 +102,8 @@ services:
       dockerfile: cmd/snapshot-generator/Dockerfile
     container_name: snapshot-generator-test
     depends_on:
-      cassandra:
-        condition: service_started
+      postgres:
+        condition: service_healthy
       mc:
         condition: service_completed_successfully
     networks:
@@ -134,7 +142,7 @@ services:
     entrypoint: ["/bin/sh", "/test.sh"]
 
 volumes:
-  cassandra_test_data:
+  postgres_test_data:
   kafka_test_data:
   minio_test_data:
 
