@@ -129,11 +129,10 @@ services:
     depends_on:
       mc:
         condition: service_completed_successfully
-      # --- ИЗМЕНЕНИЕ ---
       kafka:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8081/sort"]
+      test: ["CMD-SHELL", "wget -q --method=POST --body-data='{\"user_id\":\"healthcheck\"}' --header='Content-Type: application/json' -O /dev/null http://localhost:8081/sort"]
       interval: 5s
       timeout: 2s
       retries: 10
