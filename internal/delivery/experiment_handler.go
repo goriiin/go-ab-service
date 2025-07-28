@@ -194,7 +194,14 @@ func (h *ExperimentHandler) CreateExperiment(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	exp.ID = uuid.NewString()
-	exp.ConfigVersion = uuid.New().String()
+
+	v7, err := uuid.NewV7()
+	if err != nil {
+		http.Error(w, "Failed to generate config version", http.StatusInternalServerError)
+		return
+	}
+	exp.ConfigVersion = v7.String()
+
 	exp.Status = ab_types.StatusDraft
 	exp.Salt = uuid.NewString()
 	if err := h.repo.CreateExperiment(&exp); err != nil {
@@ -238,7 +245,14 @@ func (h *ExperimentHandler) UpdateExperiment(w http.ResponseWriter, r *http.Requ
 	}
 	updatedExp.ID = existingExp.ID
 	updatedExp.Salt = existingExp.Salt
-	updatedExp.ConfigVersion = uuid.New().String()
+
+	v7, err := uuid.NewV7()
+	if err != nil {
+		http.Error(w, "Failed to generate config version", http.StatusInternalServerError)
+		return
+	}
+	updatedExp.ConfigVersion = v7.String()
+
 	if err := h.repo.UpdateExperiment(&updatedExp); err != nil {
 		http.Error(w, "Failed to update experiment in database", http.StatusInternalServerError)
 		return
