@@ -34,6 +34,39 @@ services:
     networks:
       - ab_net_test
 
+  minio:
+    image: minio/minio:latest
+    container_name: minio-test
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 2s
+      retries: 5
+    networks:
+      - ab_net_test
+
+  mc:
+    image: minio/mc
+    container_name: mc-test
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      /usr/bin/mc alias set local http://minio:9000 minioadmin minioadmin;
+      /usr/bin/mc mb local/ab-snapshots --ignore-existing;
+      /usr/bin/mc policy set download local/ab-snapshots;
+      echo '[]' > /tmp/initial_snapshot.json;
+      /usr/bin/mc cp /tmp/initial_snapshot.json local/ab-snapshots/snapshot-initial.json;
+      echo 'Initial empty snapshot created.';
+      "
+    networks:
+      - ab_net_test
+
   central-api:
     build:
       context: .
@@ -50,12 +83,40 @@ services:
     networks:
       - ab_net_test
 
+  outbox-worker:
+    build:
+      context: .
+      dockerfile: cmd/outbox-worker/Dockerfile
+    container_name: outbox-worker-test
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+    networks:
+      - ab_net_test
+
+  snapshot-generator:
+    build:
+      context: .
+      dockerfile: cmd/snapshot-generator/Dockerfile
+    container_name: snapshot-generator-test
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mc:
+        condition: service_completed_successfully
+    networks:
+      - ab_net_test
+
   example-sort-app:
     build:
       context: .
       dockerfile: cmd/example-sort-app/Dockerfile
     container_name: example-sort-app-test
     depends_on:
+      mc:
+        condition: service_completed_successfully
       kafka:
         condition: service_started
     healthcheck:
@@ -83,6 +144,7 @@ services:
 volumes:
   postgres_test_data:
   kafka_test_data:
+  minio_test_data:
 
 networks:
   ab_net_test:
