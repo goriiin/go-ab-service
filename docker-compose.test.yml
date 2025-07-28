@@ -75,6 +75,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    environment:
+      - DB_NAME=ab_platform_test
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8080/health"]
       interval: 5s
@@ -93,6 +95,8 @@ services:
         condition: service_healthy
       kafka:
         condition: service_started
+    environment:
+      - DB_NAME=ab_platform_test
     networks:
       - ab_net_test
 
@@ -106,6 +110,8 @@ services:
         condition: service_healthy
       mc:
         condition: service_completed_successfully
+    environment:
+      - DB_NAME=ab_platform_test
     networks:
       - ab_net_test
 
@@ -148,4 +154,4 @@ volumes:
 
 networks:
   ab_net_test:
-    driver: bridge
+    driver: bridge```
