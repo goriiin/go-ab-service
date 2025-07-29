@@ -215,8 +215,12 @@ func (h *ExperimentHandler) CreateExperiment(w http.ResponseWriter, r *http.Requ
 	}
 	exp.ConfigVersion = v7.String()
 
-	exp.Status = ab_types.StatusDraft
-	exp.Salt = uuid.NewString()
+	if exp.Status == "" {
+		exp.Status = ab_types.StatusDraft
+	}
+
+	exp.ConfigVersion = v7.String()
+
 	if err := h.repo.CreateExperiment(&exp); err != nil {
 		http.Error(w, "Failed to create experiment in database", http.StatusInternalServerError)
 		return
