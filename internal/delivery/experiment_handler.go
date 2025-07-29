@@ -98,43 +98,35 @@ func evaluateUserAssignments(req *DecisionRequest, experiments []ab_types.Experi
 // 4. Проверка правил таргетинга (TargetingRules).
 // 5. Процентное распределение (бакетирование).
 func evaluateSingleExperiment(req *DecisionRequest, exp *ab_types.Experiment) (bool, string) {
-	// 1. Предварительная фильтрация: эксперимент должен быть активен и не завершён.
 	if exp.Status != ab_types.StatusActive || (exp.EndTime != nil && exp.EndTime.Before(time.Now())) {
 		return false, ""
 	}
 
-	// 2. Проверка ручных исключений: если пользователь в списке, он не участвует.
 	if slices.Contains(exp.OverrideLists.ForceExclude, req.UserID) {
 		return false, ""
 	}
 
-	// 3. Проверка принудительного включения в конкретный вариант.
-	// Этот шаг имеет наивысший приоритет и игнорирует таргетинг и бакетирование.
 	if exp.OverrideLists.ForceInclude != nil {
 		for variantName, userList := range exp.OverrideLists.ForceInclude {
 			if slices.Contains(userList, req.UserID) {
-				return true, variantName // Пользователь принудительно назначен этому варианту.
+				return true, variantName
 			}
 		}
 	}
 
-	// 4. Проверка правил таргетинга: пользователь должен соответствовать всем правилам.
 	if !checkTargetingRules(req, exp.TargetingRules) {
 		return false, ""
 	}
 
-	// 5. Финальное распределение (бакетирование) на основе хеша.
 	hashKey := []byte(req.UserID + exp.Salt)
 	bucket := xxhash.Sum64(hashKey) % 1000
 
 	for _, variant := range exp.Variants {
 		if bucket >= uint64(variant.BucketRange[0]) && bucket <= uint64(variant.BucketRange[1]) {
-			return true, variant.Name // Пользователь попал в диапазон бакетов варианта.
+			return true, variant.Name
 		}
 	}
 
-	// Если пользователь прошел все проверки, но не попал ни в один бакет (например, из-за ошибки в конфигурации),
-	// он не участвует в эксперименте.
 	return false, ""
 }
 

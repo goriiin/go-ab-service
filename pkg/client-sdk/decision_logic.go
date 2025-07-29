@@ -16,26 +16,33 @@ import (
 
 // evaluateExperiment выполняет полную проверку одного эксперимента для пользователя.
 func (c *Client) evaluateExperiment(ctx *DecisionContext, exp *ab_types.Experiment) (bool, string) {
-	// 1. Предварительная фильтрация
+	// 1. Предварительная фильтрация: эксперимент неактивен или завершен.
 	if exp.Status != ab_types.StatusActive || (exp.EndTime != nil && exp.EndTime.Before(time.Now())) {
 		return false, ""
 	}
 
-	// 2. Проверка ручных исключений
+	// 2. Проверка ручных исключений: пользователь в списке ForceExclude.
 	if slices.Contains(exp.OverrideLists.ForceExclude, ctx.UserID) {
 		return false, ""
 	}
 
-	// 3. Проверка ручных включений (пропускает таргетинг)
-	isForceIncluded := slices.Contains(exp.OverrideLists.ForceInclude, ctx.UserID)
-	if !isForceIncluded {
-		// 4. Проверка правил таргетинга
-		if !c.checkTargetingRules(ctx, exp.TargetingRules) {
-			return false, ""
+	// 3. Проверка принудительного назначения варианта (имеет высший приоритет).
+	if exp.OverrideLists.ForceInclude != nil {
+		for variantName, userList := range exp.OverrideLists.ForceInclude {
+			if slices.Contains(userList, ctx.UserID) {
+				// Пользователь принудительно назначен этому варианту.
+				// Логика таргетинга и бакетирования игнорируется.
+				return true, variantName
+			}
 		}
 	}
 
-	// 5. Финальное распределение (бакетирование)
+	// 4. Проверка правил таргетинга: пользователь должен соответствовать всем правилам.
+	if !c.checkTargetingRules(ctx, exp.TargetingRules) {
+		return false, ""
+	}
+
+	// 5. Финальное распределение (бакетирование).
 	return c.getVariantForUser(ctx, exp)
 }
 
