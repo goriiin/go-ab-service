@@ -83,14 +83,11 @@ type TargetingRule struct {
 }
 
 // OverrideLists содержит списки пользователей для принудительного включения/исключения.
-// На основе ответа на вопрос №6, логика ForceInclude теперь означает 100% участие.
+// логика ForceInclude теперь означает 100% участие.
 type OverrideLists struct {
-	// ForceInclude - список ID пользователей для принудительного включения в эксперимент.
-	// Эти пользователи пропускают проверку правил таргетинга и сразу переходят к бакетированию.
-	ForceInclude []string `json:"force_include"`
-
-	// ForceExclude - список ID пользователей для принудительного исключения из эксперимента.
-	ForceExclude []string `json:"force_exclude"`
+	// Ключ - имя варианта, значение - массив ID пользователей.
+	ForceInclude map[string][]string `json:"force_include"`
+	ForceExclude []string            `json:"force_exclude"`
 }
 
 // Variant определяет один из вариантов в эксперименте (контрольный или тестовый).

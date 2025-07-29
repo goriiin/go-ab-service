@@ -88,37 +88,53 @@ func evaluateUserAssignments(req *DecisionRequest, experiments []ab_types.Experi
 	return assignments
 }
 
+// File: go-ab-service/internal/delivery/experiment_handler.go
+
 // evaluateSingleExperiment выполняет полную проверку одного эксперимента для пользователя.
+// Функция следует строгому порядку приоритетов для принятия решения:
+// 1. Фильтрация по статусу и времени.
+// 2. Принудительное исключение (ForceExclude).
+// 3. Принудительное включение в конкретный вариант (ForceInclude).
+// 4. Проверка правил таргетинга (TargetingRules).
+// 5. Процентное распределение (бакетирование).
 func evaluateSingleExperiment(req *DecisionRequest, exp *ab_types.Experiment) (bool, string) {
-	// 1. Предварительная фильтрация
+	// 1. Предварительная фильтрация: эксперимент должен быть активен и не завершён.
 	if exp.Status != ab_types.StatusActive || (exp.EndTime != nil && exp.EndTime.Before(time.Now())) {
 		return false, ""
 	}
 
-	// 2. Проверка ручных исключений
+	// 2. Проверка ручных исключений: если пользователь в списке, он не участвует.
 	if slices.Contains(exp.OverrideLists.ForceExclude, req.UserID) {
 		return false, ""
 	}
 
-	// 3. Проверка ручных включений (пропускает таргетинг)
-	isForceIncluded := slices.Contains(exp.OverrideLists.ForceInclude, req.UserID)
-	if !isForceIncluded {
-		// 4. Проверка правил таргетинга
-		if !checkTargetingRules(req, exp.TargetingRules) {
-			return false, ""
+	// 3. Проверка принудительного включения в конкретный вариант.
+	// Этот шаг имеет наивысший приоритет и игнорирует таргетинг и бакетирование.
+	if exp.OverrideLists.ForceInclude != nil {
+		for variantName, userList := range exp.OverrideLists.ForceInclude {
+			if slices.Contains(userList, req.UserID) {
+				return true, variantName // Пользователь принудительно назначен этому варианту.
+			}
 		}
 	}
 
-	// 5. Финальное распределение (бакетирование)
+	// 4. Проверка правил таргетинга: пользователь должен соответствовать всем правилам.
+	if !checkTargetingRules(req, exp.TargetingRules) {
+		return false, ""
+	}
+
+	// 5. Финальное распределение (бакетирование) на основе хеша.
 	hashKey := []byte(req.UserID + exp.Salt)
 	bucket := xxhash.Sum64(hashKey) % 1000
 
 	for _, variant := range exp.Variants {
 		if bucket >= uint64(variant.BucketRange[0]) && bucket <= uint64(variant.BucketRange[1]) {
-			return true, variant.Name
+			return true, variant.Name // Пользователь попал в диапазон бакетов варианта.
 		}
 	}
 
+	// Если пользователь прошел все проверки, но не попал ни в один бакет (например, из-за ошибки в конфигурации),
+	// он не участвует в эксперименте.
 	return false, ""
 }
 
