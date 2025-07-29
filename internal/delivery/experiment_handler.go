@@ -193,6 +193,11 @@ func (h *ExperimentHandler) CreateExperiment(w http.ResponseWriter, r *http.Requ
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
+
+	if exp.Salt == "" {
+		exp.Salt = uuid.NewString()
+	}
+
 	exp.ID = uuid.NewString()
 
 	v7, err := uuid.NewV7()
